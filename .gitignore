@@ -1,0 +1,7 @@
+build
+test-images
+test
+resources
+.zed
+.cache
+compile_commands.json
