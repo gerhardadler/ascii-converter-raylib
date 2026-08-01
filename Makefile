@@ -1,7 +1,7 @@
 PLATFORM ?= PLATFORM_DESKTOP
 
 CC      := gcc
-BIN     := build/ascii_renderer
+BIN     := build/ascii_converter
 
 WARN    := -Wall -Wextra -Wpedantic -Wshadow -Wconversion
 CFLAGS  := -std=c11 -g -O0 $(WARN) -MMD -MP
