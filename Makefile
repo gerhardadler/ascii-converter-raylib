@@ -4,10 +4,10 @@ CC      := gcc
 BIN     := build/ascii_converter
 
 WARN    := -Wall -Wextra -Wpedantic -Wshadow -Wconversion
-CFLAGS  := -std=c11 -g -O0 $(WARN) -MMD -MP
+CFLAGS  := -std=c11 -g -O3 -fopenmp $(WARN) -MMD -MP
 CFLAGS  += -Iinclude -isystem vendor/raygui -isystem vendor/stb_truetype -isystem vendor/parse_args
 CFLAGS  += $(shell pkg-config --cflags raylib)
-LDLIBS  := $(shell pkg-config --libs raylib) -lm
+LDLIBS  := $(shell pkg-config --libs raylib) -lm -fopenmp
 
 SRC := $(wildcard src/*.c)
 OBJ := $(patsubst src/%.c,build/%.o,$(SRC))
