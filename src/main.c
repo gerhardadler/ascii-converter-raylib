@@ -1,6 +1,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 
 #include "font_metrics.h"
 #include "grow_string.h"
@@ -139,29 +140,40 @@ Color GetFontAverageColor(Color* fontPixels, int imageWidth, Rectangle* rect,
     return BlendColors(foregroundColor, backgroundColor, averageValue);
 }
 
+
+// Finds the maximum component of RGB.
+// This gives us the V component of HSV.
+inline int ColorToValue(Color color) {
+    int value = color.r;
+    if (color.g > value) value = color.g;
+    if (color.b > value) value = color.b;
+
+    return value;
+}
+
 float PerPixelDifference(Color* image1Pixels, Color* image2Pixels,
                          int image1Width, int image2Width, Rectangle* rect1,
                          Rectangle* rect2) {
-    double sumDifference = 0;
-    double pixelCount = rect1->width * rect1->height;
+    int sumDifference = 0;
+    float pixelCount = rect1->width * rect1->height;
+
     for (int y = 0; y < (int)rect1->height; y++) {
+        int y1 = (y + (int)rect1->y) * image1Width;
+        int y2 = (y + (int)rect2->y) * image2Width;
+
         for (int x = 0; x < (int)rect1->width; x++) {
-            int y1Coordinate = y + (int)rect1->y;
-            int x1Coordinate = x + (int)rect1->x;
-            int y2Coordinate = y + (int)rect2->y;
-            int x2Coordinate = x + (int)rect2->x;
+            int x1 = x + (int)rect1->x;
+            int x2 = x + (int)rect2->x;
 
-            Color image1Color =
-                image1Pixels[y1Coordinate * image1Width + x1Coordinate];
-            Color image2Color =
-                image2Pixels[y2Coordinate * image2Width + x2Coordinate];
+            Color   image1Color = image1Pixels[x1 + y1];
+            uint8_t image2Alpha = image2Pixels[x2 + y2].a;
 
-            float image1Value = ColorToHSV(image1Color).z;
-            float image2Value = (float)image2Color.a / 255.0f;
-            sumDifference += fabs(image1Value - image2Value);
+            int value = ColorToValue(image1Color);
+            sumDifference += abs(value - image2Alpha);
         }
     }
-    return (float)(sumDifference / pixelCount);
+
+    return (float)((float)sumDifference / 255.0 / pixelCount);
 }
 
 float PerPixelDifferenceOffset(Color* image1Pixels, Color* image2Pixels,
@@ -397,7 +409,7 @@ int main(int argc, char* argv[]) {
             Color averageColor = GetAverageColorInSection(
                 imagePixels, image.width, &imageSection);
 
-            Vector3 averageHSV = ColorToHSV(averageColor);
+            float averageValue = (float)ColorToValue(averageColor) / 255.0f;
 
             int closestGlyph = 0;
             float closestGlyphDelta = 999.0f;
@@ -406,7 +418,7 @@ int main(int argc, char* argv[]) {
             for (int i = 0; i < (int)fontInformation.memberCount; i++) {
                 FontMember fontMember = fontInformation.members[i];
                 float averageDifferance =
-                    fabsf(fontMember.value - averageHSV.z);
+                    fabsf(fontMember.value - averageValue);
 
                 float perPixelDifferance;
                 if (commandLineArguments.wiggleGlyph) {
