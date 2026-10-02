@@ -35,21 +35,21 @@ echo "# Without wiggle"
     --font-path "resources/fonts/FiraCode-Bold.ttf" \
     --input-path "resources/dylan_portrait.png" \
     --columns 100 \
-    --out-image-path "test-images/timed/${debug_name}_timed.png" \
+    --out-image-path "test-images/timed/${debug_name}_timed_nowiggle.png" \
     | grep '^Calculation time'
 
 ./build/ascii_converter \
     --font-path "resources/fonts/FiraCode-Bold.ttf" \
     --input-path "resources/dylan_portrait.png" \
     --columns 100 \
-    --out-image-path "test-images/timed/${debug_name}_timed.png" \
+    --out-image-path "test-images/timed/${debug_name}_timed_nowiggle.png" \
     | grep '^Calculation time'
 
 ./build/ascii_converter \
     --font-path "resources/fonts/FiraCode-Bold.ttf" \
     --input-path "resources/dylan_portrait.png" \
     --columns 100 \
-    --out-image-path "test-images/timed/${debug_name}_timed.png" \
+    --out-image-path "test-images/timed/${debug_name}_timed_nowiggle.png" \
     | grep '^Calculation time'
 
 echo "# Without wiggle without perpixeldifference"
@@ -58,7 +58,7 @@ echo "# Without wiggle without perpixeldifference"
     --font-path "resources/fonts/FiraCode-Bold.ttf" \
     --input-path "resources/dylan_portrait.png" \
     --columns 100 \
-    --out-image-path "test-images/timed/${debug_name}_timed.png" \
+    --out-image-path "test-images/timed/${debug_name}_timed_nowiggle_noppd.png" \
     --per-pixel-weight 0 \
     | grep '^Calculation time'
 
@@ -66,7 +66,7 @@ echo "# Without wiggle without perpixeldifference"
     --font-path "resources/fonts/FiraCode-Bold.ttf" \
     --input-path "resources/dylan_portrait.png" \
     --columns 100 \
-    --out-image-path "test-images/timed/${debug_name}_timed.png" \
+    --out-image-path "test-images/timed/${debug_name}_timed_nowiggle_noppd.png" \
     --per-pixel-weight 0 \
     | grep '^Calculation time'
 
@@ -74,6 +74,6 @@ echo "# Without wiggle without perpixeldifference"
     --font-path "resources/fonts/FiraCode-Bold.ttf" \
     --input-path "resources/dylan_portrait.png" \
     --columns 100 \
-    --out-image-path "test-images/timed/${debug_name}_timed.png" \
+    --out-image-path "test-images/timed/${debug_name}_timed_nowiggle_noppd.png" \
     --per-pixel-weight 0 \
     | grep '^Calculation time'
