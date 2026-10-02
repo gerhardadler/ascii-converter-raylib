@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -162,7 +163,9 @@ float PerPixelDifference(Color* image1Pixels, Color* image2Pixels,
             sumDifference += fabs(image1Value - image2Value);
         }
     }
-    return (float)(sumDifference / pixelCount);
+    float out = (float)(sumDifference / pixelCount);
+    assert(out >= 0 && out <= 1);
+    return out;
 }
 
 float PerPixelDifferenceOffset(Color* image1Pixels, Color* image2Pixels,
@@ -184,6 +187,7 @@ float PerPixelDifferenceOffset(Color* image1Pixels, Color* image2Pixels,
             }
         }
     }
+    assert(leastDifference >= 0 && leastDifference <= 1);
     return leastDifference;
 }
 
@@ -349,6 +353,36 @@ int loadFont(FontInformation* fontInformation, int fontSize, char* fontPath) {
     return 0;
 }
 
+typedef struct {
+    float averageDifference;
+    int index;
+} AverageDifferenceMember;
+
+int AverageDistanceMemberCmpAsc(const void* a, const void* b) {
+    const AverageDifferenceMember *x = a, *y = b;
+    return (y->averageDifference < x->averageDifference) -
+           (y->averageDifference > x->averageDifference);
+}
+
+AverageDifferenceMember* getAverageDifferenceSorted(
+    float averageValue, FontInformation fontInformation) {
+    AverageDifferenceMember* averageDifferenceMembers =
+        malloc(sizeof(AverageDifferenceMember) * fontInformation.memberCount);
+
+    // find closest value
+    for (int i = 0; i < (int)fontInformation.memberCount; i++) {
+        FontMember fontMember = fontInformation.members[i];
+        float averageDifferance = fabsf(fontMember.value - averageValue);
+        assert(averageDifferance >= 0 && averageDifferance <= 1);
+
+        averageDifferenceMembers[i].index = i;
+        averageDifferenceMembers[i].averageDifference = averageDifferance;
+    }
+    qsort(averageDifferenceMembers, fontInformation.memberCount,
+          sizeof *averageDifferenceMembers, AverageDistanceMemberCmpAsc);
+    return averageDifferenceMembers;
+}
+
 int main(int argc, char* argv[]) {
     CommandLineArguments commandLineArguments;
     if (parseArguments(&commandLineArguments, argc, argv) != 0) {
@@ -405,13 +439,22 @@ int main(int argc, char* argv[]) {
             int closestGlyph = 0;
             float closestGlyphDelta = 999.0f;
 
-            // find closest value
-            for (int i = 0; i < (int)fontInformation.memberCount; i++) {
-                FontMember fontMember = fontInformation.members[i];
-                float averageDifferance =
-                    fabsf(fontMember.value - averageHSV.z);
+            // by sorting the average difference, we can stop calculating when
+            // finding closer glyphs with perPixelDifference is impossible
+            AverageDifferenceMember* averageDifferanceMembers =
+                getAverageDifferenceSorted(averageHSV.z, fontInformation);
 
-                float glyphDelta = averageDifferance;
+            // find closest value
+            for (int i_ = 0; i_ < (int)fontInformation.memberCount; i_++) {
+                int i = averageDifferanceMembers[i_].index;
+                float glyphDelta =
+                    averageDifferanceMembers[i_].averageDifference;
+
+                if (glyphDelta > closestGlyphDelta) {
+                    break;
+                }
+
+                FontMember fontMember = fontInformation.members[i];
 
                 if (commandLineArguments.perPixelWeight != 0) {
                     float perPixelDifferance;
@@ -442,6 +485,8 @@ int main(int argc, char* argv[]) {
                 // filename[5] = fontChars[i];
                 // ExportImage(glyphImage, filename);
             }
+            free(averageDifferanceMembers);
+
             FontMember closestFontMember =
                 fontInformation.members[closestGlyph];
             selectedChars[y * commandLineArguments.colCount + x] =
