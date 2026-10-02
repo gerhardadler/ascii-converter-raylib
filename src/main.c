@@ -1,6 +1,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <time.h>
 
 #include "font_metrics.h"
 #include "grow_string.h"
@@ -387,6 +388,8 @@ int main(int argc, char* argv[]) {
 
     Image debugImage = GenImageColor(image.width, image.height, BLACK);
 
+    clock_t startComputationTime = clock();
+
     for (int y = 0; y < rowCount; y++) {
         for (int x = 0; x < commandLineArguments.colCount; x++) {
             Rectangle imageSection = {(float)(x * fontInformation.glyphWidth),
@@ -408,24 +411,26 @@ int main(int argc, char* argv[]) {
                 float averageDifferance =
                     fabsf(fontMember.value - averageHSV.z);
 
-                float perPixelDifferance;
-                if (commandLineArguments.wiggleGlyph) {
-                    perPixelDifferance = PerPixelDifferenceOffset(
-                        imagePixels, fontInformation.pixels, image.width,
-                        fontInformation.atlas.width, &imageSection,
-                        &fontMember.fullRec,
-                        commandLineArguments.wiggleGlyphCost);
-                } else {
-                    perPixelDifferance = PerPixelDifference(
-                        imagePixels, fontInformation.pixels, image.width,
-                        fontInformation.atlas.width, &imageSection,
-                        &fontMember.fullRec);
+                float glyphDelta = averageDifferance;
+
+                if (commandLineArguments.perPixelWeight != 0) {
+                    float perPixelDifferance;
+                    if (commandLineArguments.wiggleGlyph) {
+                        perPixelDifferance = PerPixelDifferenceOffset(
+                            imagePixels, fontInformation.pixels, image.width,
+                            fontInformation.atlas.width, &imageSection,
+                            &fontMember.fullRec,
+                            commandLineArguments.wiggleGlyphCost);
+                    } else {
+                        perPixelDifferance = PerPixelDifference(
+                            imagePixels, fontInformation.pixels, image.width,
+                            fontInformation.atlas.width, &imageSection,
+                            &fontMember.fullRec);
+                    }
+                    glyphDelta += perPixelDifferance *
+                                  commandLineArguments.perPixelWeight;
                 }
 
-                // printf("%c: %f\n", fontChars[i], perPixelDifferance);
-                float glyphDelta =
-                    averageDifferance +
-                    perPixelDifferance * commandLineArguments.perPixelWeight;
                 if (glyphDelta < closestGlyphDelta) {
                     closestGlyph = i;
                     closestGlyphDelta = glyphDelta;
@@ -445,6 +450,13 @@ int main(int argc, char* argv[]) {
                       closestFontMember.fullRec, imageSection, WHITE);
         }
     }
+
+    clock_t endComputationTime = clock();
+
+    printf(
+        "Calculation time: %f seconds\n",
+        (double)(endComputationTime - startComputationTime) / CLOCKS_PER_SEC);
+
     if (commandLineArguments.outSvgPath != NULL) {
         ExportSvg(commandLineArguments.outSvgPath, selectedChars,
                   commandLineArguments.colCount, rowCount, fontInformation);
