@@ -2,10 +2,10 @@ PLATFORM ?= PLATFORM_DESKTOP
 CC      := gcc
 BIN     := build/ascii_converter
 WARN    := -Wall -Wextra -Wpedantic -Wshadow -Wconversion
-CFLAGS  := -std=c11 $(WARN) -MMD -MP
+CFLAGS  := -std=c11 $(WARN) -MMD -MP -fopenmp
 CFLAGS  += -Iinclude -isystem vendor/raygui -isystem vendor/stb_truetype -isystem vendor/parse_args
 CFLAGS  += $(shell pkg-config --cflags raylib)
-LDLIBS  := $(shell pkg-config --libs raylib) -lm
+LDLIBS  := $(shell pkg-config --libs raylib) -lm -fopenmp
 
 # Debug flags by default
 CFLAGS  += -g -O0

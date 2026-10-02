@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <math.h>
+#include <omp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
@@ -365,22 +366,20 @@ int AverageDistanceMemberCmpAsc(const void* a, const void* b) {
 }
 
 AverageDifferenceMember* getAverageDifferenceSorted(
-    float averageValue, FontInformation fontInformation) {
-    AverageDifferenceMember* averageDifferenceMembers =
-        malloc(sizeof(AverageDifferenceMember) * fontInformation.memberCount);
-
+    float averageValue, FontInformation fontInformation,
+    AverageDifferenceMember* out) {
     // find closest value
     for (int i = 0; i < (int)fontInformation.memberCount; i++) {
         FontMember fontMember = fontInformation.members[i];
         float averageDifferance = fabsf(fontMember.value - averageValue);
         assert(averageDifferance >= 0 && averageDifferance <= 1);
 
-        averageDifferenceMembers[i].index = i;
-        averageDifferenceMembers[i].averageDifference = averageDifferance;
+        out[i].index = i;
+        out[i].averageDifference = averageDifferance;
     }
-    qsort(averageDifferenceMembers, fontInformation.memberCount,
-          sizeof *averageDifferenceMembers, AverageDistanceMemberCmpAsc);
-    return averageDifferenceMembers;
+    qsort(out, fontInformation.memberCount, sizeof *out,
+          AverageDistanceMemberCmpAsc);
+    return out;
 }
 
 int main(int argc, char* argv[]) {
@@ -422,85 +421,92 @@ int main(int argc, char* argv[]) {
 
     Image debugImage = GenImageColor(image.width, image.height, BLACK);
 
-    clock_t startComputationTime = clock();
+    double startComputationTime = omp_get_wtime();
 
+    int cellCount = rowCount * commandLineArguments.colCount;
+    int* chosenGlyph = malloc((size_t)cellCount * sizeof(int));
+
+#pragma omp parallel
+    {
+        AverageDifferenceMember* sorted = malloc(
+            fontInformation.memberCount * sizeof(AverageDifferenceMember));
+
+#pragma omp for collapse(2) schedule(dynamic, 16)
+        for (int y = 0; y < rowCount; y++) {
+            for (int x = 0; x < commandLineArguments.colCount; x++) {
+                Rectangle imageSection = {
+                    (float)(x * fontInformation.glyphWidth),
+                    (float)(y * fontInformation.glyphHeight),
+                    (float)fontInformation.glyphWidth,
+                    (float)fontInformation.glyphHeight};
+
+                Color averageColor = GetAverageColorInSection(
+                    imagePixels, image.width, &imageSection);
+                Vector3 averageHSV = ColorToHSV(averageColor);
+
+                getAverageDifferenceSorted(averageHSV.z, fontInformation,
+                                           sorted);
+
+                int closestGlyph = 0;
+                float closestGlyphDelta = 999.0f;
+
+                for (int i_ = 0; i_ < (int)fontInformation.memberCount; i_++) {
+                    int i = sorted[i_].index;
+                    float glyphDelta = sorted[i_].averageDifference;
+                    if (glyphDelta > closestGlyphDelta) break;
+
+                    FontMember fontMember = fontInformation.members[i];
+
+                    if (commandLineArguments.perPixelWeight != 0) {
+                        float d =
+                            commandLineArguments.wiggleGlyph
+                                ? PerPixelDifferenceOffset(
+                                      imagePixels, fontInformation.pixels,
+                                      image.width, fontInformation.atlas.width,
+                                      &imageSection, &fontMember.fullRec,
+                                      commandLineArguments.wiggleGlyphCost)
+                                : PerPixelDifference(
+                                      imagePixels, fontInformation.pixels,
+                                      image.width, fontInformation.atlas.width,
+                                      &imageSection, &fontMember.fullRec);
+                        glyphDelta += d * commandLineArguments.perPixelWeight;
+                    }
+
+                    if (glyphDelta < closestGlyphDelta) {
+                        closestGlyph = i;
+                        closestGlyphDelta = glyphDelta;
+                    }
+                }
+
+                int cell = y * commandLineArguments.colCount + x;
+                chosenGlyph[cell] = closestGlyph;
+                selectedChars[cell] =
+                    fontInformation.members[closestGlyph].fontChar;
+            }
+        }
+
+        free(sorted);
+    }
+
+    // serial pass: cheap, and avoids racing on debugImage
     for (int y = 0; y < rowCount; y++) {
         for (int x = 0; x < commandLineArguments.colCount; x++) {
+            int cell = y * commandLineArguments.colCount + x;
             Rectangle imageSection = {(float)(x * fontInformation.glyphWidth),
                                       (float)(y * fontInformation.glyphHeight),
                                       (float)fontInformation.glyphWidth,
                                       (float)fontInformation.glyphHeight};
-
-            Color averageColor = GetAverageColorInSection(
-                imagePixels, image.width, &imageSection);
-
-            Vector3 averageHSV = ColorToHSV(averageColor);
-
-            int closestGlyph = 0;
-            float closestGlyphDelta = 999.0f;
-
-            // by sorting the average difference, we can stop calculating when
-            // finding closer glyphs with perPixelDifference is impossible
-            AverageDifferenceMember* averageDifferanceMembers =
-                getAverageDifferenceSorted(averageHSV.z, fontInformation);
-
-            // find closest value
-            for (int i_ = 0; i_ < (int)fontInformation.memberCount; i_++) {
-                int i = averageDifferanceMembers[i_].index;
-                float glyphDelta =
-                    averageDifferanceMembers[i_].averageDifference;
-
-                if (glyphDelta > closestGlyphDelta) {
-                    break;
-                }
-
-                FontMember fontMember = fontInformation.members[i];
-
-                if (commandLineArguments.perPixelWeight != 0) {
-                    float perPixelDifferance;
-                    if (commandLineArguments.wiggleGlyph) {
-                        perPixelDifferance = PerPixelDifferenceOffset(
-                            imagePixels, fontInformation.pixels, image.width,
-                            fontInformation.atlas.width, &imageSection,
-                            &fontMember.fullRec,
-                            commandLineArguments.wiggleGlyphCost);
-                    } else {
-                        perPixelDifferance = PerPixelDifference(
-                            imagePixels, fontInformation.pixels, image.width,
-                            fontInformation.atlas.width, &imageSection,
-                            &fontMember.fullRec);
-                    }
-                    glyphDelta += perPixelDifferance *
-                                  commandLineArguments.perPixelWeight;
-                }
-
-                if (glyphDelta < closestGlyphDelta) {
-                    closestGlyph = i;
-                    closestGlyphDelta = glyphDelta;
-                }
-
-                // export character
-                // Image glyphImage = ImageFromImage(fontAtlas, fontRect);
-                // char filename[11] = "test/$.png";
-                // filename[5] = fontChars[i];
-                // ExportImage(glyphImage, filename);
-            }
-            free(averageDifferanceMembers);
-
-            FontMember closestFontMember =
-                fontInformation.members[closestGlyph];
-            selectedChars[y * commandLineArguments.colCount + x] =
-                closestFontMember.fontChar;
             ImageDraw(&debugImage, fontInformation.atlas,
-                      closestFontMember.fullRec, imageSection, WHITE);
+                      fontInformation.members[chosenGlyph[cell]].fullRec,
+                      imageSection, WHITE);
         }
     }
+    free(chosenGlyph);
 
-    clock_t endComputationTime = clock();
+    double endComputationTime = omp_get_wtime();
 
-    printf(
-        "Calculation time: %f seconds\n",
-        (double)(endComputationTime - startComputationTime) / CLOCKS_PER_SEC);
+    printf("Calculation time: %f seconds\n",
+           endComputationTime - startComputationTime);
 
     if (commandLineArguments.outSvgPath != NULL) {
         ExportSvg(commandLineArguments.outSvgPath, selectedChars,
